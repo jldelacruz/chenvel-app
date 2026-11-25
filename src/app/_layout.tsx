@@ -12,9 +12,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
+import { Provider as ReduxProvider } from 'react-redux';
 
-import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { navDarkTheme, navLightTheme, paperDarkTheme, paperLightTheme } from '@/theme';
+import { store, useAppDispatch, useAppSelector } from '@/store';
+import { logout, restoreSession } from '@/store/authSlice';
 import { ThemeModeProvider, useThemeMode } from '@/theme/ThemeModeProvider';
 
 // Keep the splash screen up until the fonts are ready, so text never flashes in a fallback font.
@@ -37,9 +39,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeModeProvider>
-        <AuthProvider>
+        <ReduxProvider store={store}>
           <ThemedApp />
-        </AuthProvider>
+        </ReduxProvider>
       </ThemeModeProvider>
     </GestureHandlerRootView>
   );
@@ -47,8 +49,26 @@ export default function RootLayout() {
 
 function ThemedApp() {
   const { isDark } = useThemeMode();
-  const { username, ready } = useAuth();
-  const signedIn = username !== null;
+  const dispatch = useAppDispatch();
+  const session = useAppSelector((state) => state.auth.session);
+  const ready = useAppSelector((state) => state.auth.restored);
+  const signedIn = session !== null;
+
+  useEffect(() => {
+    dispatch(restoreSession());
+  }, [dispatch]);
+
+  // The token stops working after a while (8 hours at the moment): sign out when it does.
+  const expiresAt = session?.expiresAt;
+  useEffect(() => {
+    if (!expiresAt) return;
+    const delay = expiresAt - Date.now();
+    // Timers longer than ~24 days fire immediately, so only schedule ones that fit.
+    if (delay > 2 ** 31 - 1) return;
+    const timer = setTimeout(() => dispatch(logout()), Math.max(0, delay));
+    return () => clearTimeout(timer);
+  }, [expiresAt, dispatch]);
+
   const theme = isDark ? paperDarkTheme : paperLightTheme;
 
   // Wait for the saved "Remember me" sign-in so a remembered user never sees the login screen flash.
@@ -66,7 +86,7 @@ function ThemedApp() {
           <Stack.Protected guard={!signedIn}>
             <Stack.Screen name="login" />
           </Stack.Protected>
-          {/* Signed in: the sidebar app. Signing in or out switches automatically. */}
+          {/* Signed in: the app. Signing in or out switches automatically. */}
           <Stack.Protected guard={signedIn}>
             <Stack.Screen name="(app)" />
           </Stack.Protected>

@@ -3,6 +3,8 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Icon, Text, useTheme } from 'react-native-paper';
 
+import { useAppDispatch } from '@/store';
+import { clearSelectedPayment } from '@/store/paymentsSlice';
 import { fontFamilies, shadows } from '@/theme';
 
 type MenuItem = {
@@ -23,6 +25,7 @@ const GAP = 16;
 /** Grid of page cards: 2 per row on phones, 3 on wider screens. */
 export function MenuGrid() {
   const theme = useTheme();
+  const dispatch = useAppDispatch();
   const { width: windowWidth } = useWindowDimensions();
   const [gridWidth, setGridWidth] = useState(0);
   const columns = windowWidth >= 700 ? 3 : 2;
@@ -45,7 +48,11 @@ export function MenuGrid() {
         <Pressable
           key={item.label}
           // navigate (not push) reuses the page that the prefetch above already built.
-          onPress={() => router.navigate(item.href)}
+          onPress={() => {
+            // Opened from Home, so not for a payment picked in the Payments table.
+            dispatch(clearSelectedPayment());
+            router.navigate(item.href);
+          }}
           accessibilityRole="button"
           accessibilityLabel={item.label}
           style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [

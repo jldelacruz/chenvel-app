@@ -1,15 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, HelperText, Icon, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/auth/AuthProvider';
+import { loadRememberedUserName } from '@/auth/sessionStorage';
 import { Panel } from '@/components/Panel';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { clearLoginError, login } from '@/store/authSlice';
 import { fontFamilies, shadows } from '@/theme';
 
 export default function LoginScreen() {
   const theme = useTheme();
-  const { signIn } = useAuth();
+  const dispatch = useAppDispatch();
+  const loading = useAppSelector((state) => state.auth.status === 'loading');
+  const loginError = useAppSelector((state) => state.auth.error);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -21,11 +25,26 @@ export default function LoginScreen() {
   const usernameMissing = submitted && !username.trim();
   const passwordMissing = submitted && !password;
 
+  // "Remember me" from last time: fill in the username and keep the box ticked.
+  useEffect(() => {
+    loadRememberedUserName().then((saved) => {
+      if (!saved) return;
+      setUsername((current) => current || saved);
+      setRemember(true);
+    });
+  }, []);
+
   const logIn = () => {
     setSubmitted(true);
-    if (!username.trim() || !password) return;
-    // Signing in switches the app to the signed-in pages automatically (see src/app/_layout.tsx).
-    signIn(username.trim(), password, remember);
+    if (loading || !username.trim() || !password) return;
+    // A successful login switches the app to the signed-in pages automatically (see src/app/_layout.tsx).
+    dispatch(login({ userName: username.trim(), password, remember }));
+  };
+
+  // The server's error is about what was typed before; hide it once either box changes.
+  const edit = (set: (value: string) => void) => (value: string) => {
+    set(value);
+    if (loginError) dispatch(clearLoginError());
   };
 
   // Soft grey filled boxes; the blue outline only appears while typing (or red on error).
@@ -62,7 +81,7 @@ export default function LoginScreen() {
               <TextInput
                 {...inputProps}
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={edit(setUsername)}
                 autoComplete="username"
                 textContentType="username"
                 returnKeyType="go"
@@ -82,7 +101,7 @@ export default function LoginScreen() {
               <TextInput
                 {...inputProps}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={edit(setPassword)}
                 secureTextEntry={!showPassword}
                 autoComplete="current-password"
                 textContentType="password"
@@ -132,9 +151,24 @@ export default function LoginScreen() {
               </Text>
             </View>
 
+            {loginError && (
+              <View
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={[styles.errorBox, { backgroundColor: theme.colors.errorContainer }]}
+              >
+                <Icon source="alert-circle-outline" size={20} color={theme.colors.onErrorContainer} />
+                <Text variant="bodyMedium" style={[styles.errorText, { color: theme.colors.onErrorContainer }]}>
+                  {loginError}
+                </Text>
+              </View>
+            )}
+
             <Button
               mode="contained"
               onPress={logIn}
+              loading={loading}
+              accessibilityLabel={loading ? 'Logging in' : 'Login'}
               style={[styles.button, { boxShadow: shadows.button }]}
               contentStyle={styles.buttonContent}
               labelStyle={styles.buttonLabel}
@@ -191,6 +225,8 @@ const styles = StyleSheet.create({
   remember: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   button: { alignSelf: 'center', width: '75%', borderRadius: 8, marginTop: 28 },
   buttonContent: { height: 50 },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8, padding: 12, marginTop: 16 },
+  errorText: { flex: 1 },
   buttonLabel: { fontSize: 16 },
   signupRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 20 },
   terms: { textAlign: 'center', marginTop: 20 },

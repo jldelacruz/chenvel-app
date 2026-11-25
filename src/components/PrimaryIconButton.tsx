@@ -8,11 +8,15 @@ type Props = {
   accessibilityLabel: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Shows a spinner instead of the icon and ignores presses (keeps the blue look). */
+  loading?: boolean;
 };
 
 /** 48×48 rounded-square blue button that lines up with a 48px-tall outlined text box. */
-export function PrimaryIconButton({ icon, accessibilityLabel, onPress, disabled }: Props) {
+export function PrimaryIconButton({ icon, accessibilityLabel, onPress, disabled, loading }: Props) {
   const theme = useTheme();
+  // Greyed out only when really unavailable; while loading it stays blue with a white spinner.
+  const dimmed = disabled && !loading;
   return (
     <IconButton
       mode="contained"
@@ -20,11 +24,13 @@ export function PrimaryIconButton({ icon, accessibilityLabel, onPress, disabled 
       size={22}
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
+      loading={loading}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       // Custom colours would hide Paper's disabled look, so only apply them when enabled.
-      containerColor={disabled ? undefined : theme.colors.primary}
-      iconColor={disabled ? undefined : theme.colors.onPrimary}
-      style={[styles.button, !disabled && { boxShadow: shadows.button }]}
+      containerColor={dimmed ? undefined : theme.colors.primary}
+      iconColor={dimmed ? undefined : theme.colors.onPrimary}
+      style={[styles.button, !dimmed && { boxShadow: shadows.button }]}
     />
   );
 }

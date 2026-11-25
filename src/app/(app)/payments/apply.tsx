@@ -3,11 +3,19 @@ import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { Button, Divider, HelperText, IconButton, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 
+import { PackageConfirmDialog } from '@/components/PackageConfirmDialog';
 import { Panel } from '@/components/Panel';
 import { PrimaryIconButton } from '@/components/PrimaryIconButton';
 import { Screen } from '@/components/Screen';
 import { SwipeToDeleteRow } from '@/components/SwipeToDeleteRow';
-import { toPayItems, type ToPayItem } from '@/data/toPay';
+import {
+  packagesFromResponse,
+  toPayItemFromPackage,
+  unpaidPackagesByBox,
+  type Package,
+  type ToPayItem,
+} from '@/api/packages';
+import { errorMessage, useLazySearchPackagesQuery } from '@/store/api';
 import { fontFamilies, shadows } from '@/theme';
 import { formatMoney } from '@/utils/format';
 import {
@@ -30,10 +38,13 @@ export default function ApplyPaymentScreen() {
   const isWide = useWindowDimensions().width >= WIDE_LAYOUT;
   const [number, setNumber] = useState('');
   const [result, setResult] = useState<Result>(null);
-  const [items, setItems] = useState<ToPayItem[]>(toPayItems);
+  const [items, setItems] = useState<ToPayItem[]>([]);
   const [notice, setNotice] = useState('');
+  // Packages found by the last search, waiting for Yes / No one at a time (first one is shown).
+  const [toConfirm, setToConfirm] = useState<Package[]>([]);
   // Measured row heights (by id), used to size the list to exactly VISIBLE_ROWS rows.
   const [rowHeights, setRowHeights] = useState<Record<string, number>>({});
+  const [searchPackages, { isFetching: searching }] = useLazySearchPackagesQuery();
 
   const trimmed = number.trim();
   const isError = result?.type === 'error';
@@ -44,8 +55,46 @@ export default function ApplyPaymentScreen() {
       setResult({ type: 'error', message: 'Invalid box number or tracking number' });
       return;
     }
-    setResult({ type: 'info', message: parcelNumberLabel(parcelNumberKind(trimmed)) });
+    const kind = parcelNumberKind(trimmed);
+    setResult({ type: 'info', message: parcelNumberLabel(kind) });
+
+    // Box numbers: look up the box's unpaid packages and add them to the To Pay list.
+    if (kind === 'box') {
+      const box = trimmed;
+      searchPackages(unpaidPackagesByBox(box))
+        .unwrap()
+        .then((response) => {
+          const found = packagesFromResponse(response);
+          if (found.length === 0) {
+            setResult({ type: 'error', message: `No unpaid packages for box ${box}` });
+            return;
+          }
+          // Only ask about packages that aren't in the list yet.
+          const known = new Set(items.map((i) => i.id));
+          const fresh = found.filter((pkg) => !known.has(toPayItemFromPackage(pkg).id));
+          if (fresh.length === 0) {
+            setNotice(`Box ${box} is already in the list.`);
+            return;
+          }
+          setToConfirm(fresh);
+        })
+        .catch((error) => setResult({ type: 'error', message: errorMessage(error) }));
+    }
   };
+
+  // Yes: add the package to the list and clear the text box. No: just close the pop-up.
+  // Either way, move on to the next found package, if any.
+  const confirmYes = () => {
+    const [pkg, ...rest] = toConfirm;
+    if (!pkg) return;
+    const item = toPayItemFromPackage(pkg);
+    setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
+    setNumber('');
+    setResult(null);
+    setNotice(`Added ${item.fullName}.`);
+    setToConfirm(rest);
+  };
+  const confirmNo = () => setToConfirm((prev) => prev.slice(1));
 
   const remove = (item: ToPayItem) => {
     setItems((prev) => prev.filter((i) => i.id !== item.id));
@@ -82,7 +131,7 @@ export default function ApplyPaymentScreen() {
               autoCorrect={false}
               error={isError}
             />
-            <PrimaryIconButton icon="plus" accessibilityLabel="Add" disabled={!trimmed} onPress={check} />
+            <PrimaryIconButton icon="plus" accessibilityLabel="Add" disabled={!trimmed} loading={searching} onPress={check} />
           </View>
           <HelperText
             type={isError ? 'error' : 'info'}
@@ -161,6 +210,7 @@ export default function ApplyPaymentScreen() {
         </Button>
       </Screen>
 
+      <PackageConfirmDialog pkg={toConfirm[0] ?? null} onYes={confirmYes} onNo={confirmNo} />
       <Snackbar visible={!!notice} onDismiss={() => setNotice('')} duration={2500}>
         {notice}
       </Snackbar>
