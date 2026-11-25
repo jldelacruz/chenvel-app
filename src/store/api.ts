@@ -7,8 +7,18 @@ import {
 } from '@reduxjs/toolkit/query/react';
 
 import { API_BASE_URL, REQUEST_TIMEOUT_MS } from '@/api/config';
-import type { PackageFilter } from '@/api/packages';
+import type { PackageFilter, PackageListFilter, PackagesResponse } from '@/api/packages';
 import type { Payment, PaymentFilter } from '@/api/payments';
+import type { EmptyBoxesResponse, EmptyBoxFilter } from '@/api/emptyBoxes';
+import type { CreditLimit, NamedItem, Town } from '@/api/lookups';
+import type {
+  LastPickup,
+  NewPickup,
+  PickupFilter,
+  PickupRecord,
+  PickupsResponse,
+  SavePickupResponse,
+} from '@/api/pickups';
 
 import { logout } from './authSlice';
 import type { RootState } from './index';
@@ -38,6 +48,10 @@ export type PaymentsArgs = { filter: PaymentFilter; start: number; length: numbe
 /** One page of payments. The API sends no total count, so `hasMore` says whether a next page exists. */
 export type PaymentsPage = { rows: Payment[]; hasMore: boolean };
 
+export type PickupsArgs = { filter: PickupFilter; start: number; length: number };
+export type PackagesArgs = { filter: PackageListFilter; start: number; length: number };
+export type EmptyBoxesArgs = { filter: EmptyBoxFilter; start: number; length: number };
+
 /**
  * All server data goes through here. Results are cached per set of arguments (filter + page), so
  * going back to a page shown recently is instant; cached data is kept 5 minutes after the last
@@ -47,6 +61,7 @@ export type PaymentsPage = { rows: Payment[]; hasMore: boolean };
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
+  tagTypes: ['Pickups', 'Pickup'],
   keepUnusedDataFor: 300,
   refetchOnMountOrArgChange: 30,
   endpoints: (build) => ({
@@ -61,6 +76,76 @@ export const api = createApi({
         hasMore: rows.length > length,
       }),
     }),
+    // GET /pickup/filter?...filter&start=0&length=10 -> { data: Pickup[], total: number }
+    getPickups: build.query<PickupsResponse, PickupsArgs>({
+      query: ({ filter, start, length }) => ({
+        url: '/pickup/filter',
+        params: { ...filter, start, length },
+      }),
+      providesTags: ['Pickups'],
+    }),
+    // Saving a pickup reloads the pickups table.
+    addPickup: build.mutation<SavePickupResponse, NewPickup>({
+      query: (pickup) => ({ url: '/pickup', method: 'POST', body: pickup }),
+      invalidatesTags: (_result, error) => (error ? [] : ['Pickups']),
+    }),
+    // TODO: check these two URLs against the web app's getPickUp / updatePickUp (assumed here).
+    getPickup: build.query<PickupRecord, number>({
+      query: (id) => `/pickup/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'Pickup', id }],
+    }),
+    updatePickup: build.mutation<SavePickupResponse, { id: number; pickup: NewPickup }>({
+      query: ({ id, pickup }) => ({ url: `/pickup/${id}`, method: 'PUT', body: pickup }),
+      invalidatesTags: (_result, error, { id }) => (error ? [] : ['Pickups', { type: 'Pickup', id }]),
+    }),
+    getLastPickupByPhone: build.query<LastPickup | null, string>({
+      query: (phoneNumber) => ({ url: '/pickup/lastPickup', params: { companyId: 0, phoneNumber } }),
+    }),
+
+    // Lists for forms. These rarely change, so they are kept for an hour.
+    getCompanies: build.query<NamedItem[], void>({
+      query: () => '/company',
+      keepUnusedDataFor: 3600,
+    }),
+    getAgents: build.query<NamedItem[], number>({
+      query: (companyId) => `/agents/${companyId}`,
+      keepUnusedDataFor: 3600,
+    }),
+    getStates: build.query<NamedItem[], number>({
+      query: (countryId) => `/states/${countryId}`,
+      keepUnusedDataFor: 3600,
+    }),
+    getCities: build.query<NamedItem[], number>({
+      query: (stateId) => `/cities/${stateId}`,
+      keepUnusedDataFor: 3600,
+    }),
+    getTowns: build.query<Town[], number>({
+      query: (cityId) => `/towns/${cityId}`,
+      keepUnusedDataFor: 3600,
+    }),
+    getTownById: build.query<Town, number>({
+      query: (id) => `/towns/byId/${id}`,
+    }),
+    getTownByPostal: build.query<Town | null, string>({
+      query: (postalCode) => `/towns/postal/${encodeURIComponent(postalCode)}`,
+    }),
+    getCreditLimit: build.query<CreditLimit, number>({
+      query: (agentId) => `/accounting/creditlimit/${agentId}`,
+    }),
+    // GET /package/getAll?...filter&start=0&length=10 -> { data: PackageListItem[], total: number }
+    getAllPackages: build.query<PackagesResponse, PackagesArgs>({
+      query: ({ filter, start, length }) => ({
+        url: '/package/getAll',
+        params: { ...filter, start, length },
+      }),
+    }),
+    // GET /emptybox/getAll?...filter&start=0&length=10 -> { data: EmptyBoxOrder[], total: number }
+    getEmptyBoxes: build.query<EmptyBoxesResponse, EmptyBoxesArgs>({
+      query: ({ filter, start, length }) => ({
+        url: '/emptybox/getAll',
+        params: { ...filter, start, length },
+      }),
+    }),
     // Response shape not known yet, so it stays `unknown` until it has been logged and typed.
     // e.g. /package/filter?PaymentStatus=UNPAID&SearchBy=Box%20Number&SearchValue=114EB194&Start=0&Length=10
     searchPackages: build.query<unknown, PackageFilter>({
@@ -72,7 +157,25 @@ export const api = createApi({
   }),
 });
 
-export const { useGetPaymentsQuery, useLazySearchPackagesQuery } = api;
+export const {
+  useGetPaymentsQuery,
+  useGetPickupsQuery,
+  useAddPickupMutation,
+  useGetPickupQuery,
+  useUpdatePickupMutation,
+  useLazyGetLastPickupByPhoneQuery,
+  useGetCompaniesQuery,
+  useGetAgentsQuery,
+  useGetStatesQuery,
+  useGetCitiesQuery,
+  useGetTownsQuery,
+  useLazyGetTownByIdQuery,
+  useLazyGetTownByPostalQuery,
+  useGetCreditLimitQuery,
+  useGetAllPackagesQuery,
+  useGetEmptyBoxesQuery,
+  useLazySearchPackagesQuery,
+} = api;
 
 /** A short, user-facing message for a failed request. */
 export function errorMessage(error: unknown): string {

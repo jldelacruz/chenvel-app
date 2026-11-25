@@ -18,6 +18,9 @@ type MenuItem = {
 const menu: MenuItem[] = [
   { href: '/payments', label: 'Payments', caption: 'List of payments', icon: 'credit-card-outline' },
   { href: '/payments/apply', label: 'Apply Payment', caption: 'Pay a package to release', icon: 'cash-plus' },
+  { href: '/pickups', label: 'Pickups', caption: 'Packages for pickup', icon: 'package-variant-closed' },
+  { href: '/packages', label: 'Packages', caption: 'All packages status', icon: 'package-variant' },
+  { href: '/orders', label: 'Orders', caption: 'Empty box orders', icon: 'cart-outline' },
 ];
 
 const GAP = 16;

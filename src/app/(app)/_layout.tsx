@@ -27,6 +27,9 @@ export default function AppLayout() {
         <Stack.Screen name="index" options={{ title: 'Home' }} />
         <Stack.Screen name="payments/index" options={{ title: 'Payments' }} />
         <Stack.Screen name="payments/apply" options={{ title: 'Apply Payment' }} />
+        <Stack.Screen name="pickups/index" options={{ title: 'Pickups' }} />
+        <Stack.Screen name="packages/index" options={{ title: 'Packages' }} />
+        <Stack.Screen name="orders/index" options={{ title: 'Orders' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       </Stack>
     </View>

@@ -63,3 +63,19 @@ export const toPayItemFromPackage = (pkg: Package): ToPayItem => ({
   number: pkg.boxno,
   amount: Number(pkg.payable) || 0,
 });
+
+/** Filter for GET /package/getAll (PackageFilterDto). The server adds the user's role and agent from the token. */
+// TODO: add the filter fields (search, status, ...) once PackageFilterDto's fields are known.
+export type PackageListFilter = Record<string, string | number>;
+
+/** One row from GET /package/getAll (PackagesGetAllViewModel; `id` comes from BaseModel). */
+export type PackageListItem = {
+  id: number;
+  senderFullName: string;
+  boxno: string;
+  equivalent: string;
+  destination: string;
+  status: string;
+};
+
+export type PackagesResponse = { data: PackageListItem[]; total: number };
