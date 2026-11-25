@@ -44,6 +44,7 @@ export function PackageConfirmDialog({ pkg, onYes, onNo }: Props) {
         </View>
         {pkg && (
           <Dialog.Content style={styles.details}>
+            <Detail label="Tracking #" value={show(pkg.trackNo)} />
             <Detail label="Sender" value={show(pkg.senderFullName)} />
             <Detail label="Receiver" value={show(pkg.receiverFullName)} />
             <Detail label="Size" value={show(pkg.equivalent)} />
@@ -51,7 +52,7 @@ export function PackageConfirmDialog({ pkg, onYes, onNo }: Props) {
             <Detail
               label="Payable"
               value={formatMoney(Number(pkg.payable) || 0)}
-              valueStyle={{ color: theme.colors.primary, fontFamily: fontFamilies.semibold }}
+              valueStyle={{ color: theme.colors.error, fontFamily: fontFamilies.semibold }}
             />
           </Dialog.Content>
         )}

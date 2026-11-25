@@ -7,10 +7,13 @@ export type PackageFilter = {
   Length: number;
 };
 
-/** Unpaid packages for a box number. */
-export const unpaidPackagesByBox = (boxNumber: string): PackageFilter => ({
-  SearchBy: 'Box Number',
-  SearchValue: boxNumber,
+/** How /package/filter can search. */
+export type PackageSearchBy = 'Box Number' | 'Tracking Number' | 'Sender Phone';
+
+/** Unpaid packages for a box number, tracking number or sender's phone number. */
+export const unpaidPackages = (searchBy: PackageSearchBy, value: string): PackageFilter => ({
+  SearchBy: searchBy,
+  SearchValue: value,
   PaymentStatus: 'UNPAID',
   Start: 0,
   Length: 1,
@@ -22,6 +25,7 @@ export const unpaidPackagesByBox = (boxNumber: string): PackageFilter => ({
  */
 export type Package = {
   id?: number | string;
+  trackNo?: string;
   senderFullName: string;
   receiverFullName?: string;
   equivalent?: string | number; // Package size.
