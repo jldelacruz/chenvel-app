@@ -11,7 +11,8 @@ import { SwipeToDeleteRow } from '@/components/SwipeToDeleteRow';
 import {
   packagesFromResponse,
   toPayItemFromPackage,
-  unpaidPackagesByBox,
+  unpaidPackages,
+  type PackageSearchBy,
   type Package,
   type ToPayItem,
 } from '@/api/packages';
@@ -20,6 +21,7 @@ import { fontFamilies, shadows } from '@/theme';
 import { formatMoney } from '@/utils/format';
 import {
   MIN_PARCEL_NUMBER_LENGTH,
+  type ParcelNumberKind,
   parcelNumberKind,
   parcelNumberLabel,
 } from '@/utils/parcelNumber';
@@ -29,6 +31,13 @@ const VISIBLE_ROWS = 5;
 
 /** From this window width up (desktop / tablet), rows get a visible Delete button instead of swipe. */
 const WIDE_LAYOUT = 768;
+
+/** For each kind of number: how the server searches it, and how messages name it. */
+const SEARCH: Record<ParcelNumberKind, { searchBy: PackageSearchBy; what: string }> = {
+  box: { searchBy: 'Box Number', what: 'box' },
+  tracking: { searchBy: 'Tracking Number', what: 'tracking number' },
+  phone: { searchBy: 'Sender Phone', what: 'phone number' },
+};
 
 /** Result of the last press of +: an error, or which kind of number was entered. */
 type Result = { type: 'error' | 'info'; message: string } | null;
@@ -58,28 +67,28 @@ export default function ApplyPaymentScreen() {
     const kind = parcelNumberKind(trimmed);
     setResult({ type: 'info', message: parcelNumberLabel(kind) });
 
-    // Box numbers: look up the box's unpaid packages and add them to the To Pay list.
-    if (kind === 'box') {
-      const box = trimmed;
-      searchPackages(unpaidPackagesByBox(box))
-        .unwrap()
-        .then((response) => {
-          const found = packagesFromResponse(response);
-          if (found.length === 0) {
-            setResult({ type: 'error', message: `No unpaid packages for box ${box}` });
-            return;
-          }
-          // Only ask about packages that aren't in the list yet.
-          const known = new Set(items.map((i) => i.id));
-          const fresh = found.filter((pkg) => !known.has(toPayItemFromPackage(pkg).id));
-          if (fresh.length === 0) {
-            setNotice(`Box ${box} is already in the list.`);
-            return;
-          }
-          setToConfirm(fresh);
-        })
-        .catch((error) => setResult({ type: 'error', message: errorMessage(error) }));
-    }
+    // Look up unpaid packages by box number, tracking number or sender's phone, then confirm
+    // each one in the pop-up.
+    const value = trimmed;
+    const what = `${SEARCH[kind].what} ${value}`;
+    searchPackages(unpaidPackages(SEARCH[kind].searchBy, value))
+      .unwrap()
+      .then((response) => {
+        const found = packagesFromResponse(response);
+        if (found.length === 0) {
+          setResult({ type: 'error', message: `No unpaid packages for ${what}` });
+          return;
+        }
+        // Only ask about packages that aren't in the list yet.
+        const known = new Set(items.map((i) => i.id));
+        const fresh = found.filter((pkg) => !known.has(toPayItemFromPackage(pkg).id));
+        if (fresh.length === 0) {
+          setNotice(`The package for ${what} is already in the list.`);
+          return;
+        }
+        setToConfirm(fresh);
+      })
+      .catch((error) => setResult({ type: 'error', message: errorMessage(error) }));
   };
 
   // Yes: add the package to the list and clear the text box. No: just close the pop-up.
